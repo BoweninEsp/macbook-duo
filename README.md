@@ -2,6 +2,8 @@
 
 [中文](#macbook-duo) · [English](#english)
 
+**Download / 下载**: [MacBook Duo v0.1.0](https://github.com/BoweninEsp/macbook-duo/releases/tag/v0.1.0) · [Direct ZIP download](https://github.com/BoweninEsp/macbook-duo/releases/download/v0.1.0/MacBook.Duo.zip)
+
 一个免费的开源 macOS 原型：让桌面随 MacBook 屏幕开合产生空间视差、渐进失焦和边缘散射。
 
 技术栈：Swift 6、AppKit、Metal、ScreenCaptureKit、IOKit HID。
