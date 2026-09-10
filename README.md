@@ -4,6 +4,8 @@
 
 技术栈：Swift 6、AppKit、Metal、ScreenCaptureKit、IOKit HID。
 
+界面支持简体中文、繁體中文、English 和 Español。语言选择在应用窗口中即时生效，并保存在本机，下次启动会沿用；首次启动会根据 macOS 首选语言自动选择。
+
 ## 运行
 
 打开 `dist/MacBook Duo.app`。拖动角度滑块或点击“播放”即可预览，无需屏幕录制权限。

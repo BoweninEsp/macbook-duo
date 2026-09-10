@@ -8,11 +8,11 @@ final class DesktopCapture: NSObject, @preconcurrency SCStreamOutput, SCStreamDe
     func start(displayID: CGDirectDisplayID, excluding windowID: Int) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-            throw NSError(domain: "找不到内置显示屏", code: 1)
+            throw AppFailure.missingDisplay
         }
         let excluded = content.windows.filter { $0.windowID == CGWindowID(windowID) }
         guard !excluded.isEmpty else {
-            throw NSError(domain: "无法排除效果窗口，已停止以防止画面递归", code: 2)
+            throw AppFailure.exclusionFailed
         }
         let filter = SCContentFilter(display: display, excludingWindows: excluded)
         let config = SCStreamConfiguration()

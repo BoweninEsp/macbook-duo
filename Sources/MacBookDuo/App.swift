@@ -39,72 +39,120 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var demoStart = Date()
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var languagePopup: NSPopUpButton!
+    private var titleLabel: NSTextField!
+    private var subtitleLabel: NSTextField!
+    private var angleTitle: NSTextField!
+    private var playButton: NSButton!
+    private var calibrateButton: NSButton!
+    private var effectsTitles: [NSTextField] = []
+    private var footerLabel: NSTextField!
+    private var language = AppLanguage.resolve(saved: UserDefaults.standard.string(forKey: "appLanguage"), preferred: Locale.preferredLanguages)
+    private var languageLabel: NSTextField!
+    private var effectSliders: [NSSlider] = []
+    private enum StatusMessage {
+        case ready, text(TextKey), calibrated(Int), captureFailed(any Error), captureStopped(String)
+    }
+    private var currentStatus: StatusMessage = .ready
+    private var menuOpenItem: NSMenuItem!
+    private var menuStopItem: NSMenuItem!
+    private var menuQuitItem: NSMenuItem!
+    private var statusQuitItem: NSMenuItem!
+
+    private func tr(_ key: TextKey) -> String { language.text(key) }
+
+    private func errorText(_ error: any Error) -> String {
+        if let failure = error as? AppFailure { return tr(failure.textKey) }
+        return error.localizedDescription
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do { preview = try FoldRenderer(size: NSSize(width: 660, height: 380)) }
-        catch { showFatal(error.localizedDescription); return }
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 740, height: 750), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        catch { showFatal(errorText(error)); return }
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 740, height: 810), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "MacBook Duo"
         window.isReleasedWhenClosed = false
         window.center()
         let root = NSStackView()
         root.orientation = .vertical
         root.alignment = .leading
-        root.spacing = 16
+        root.spacing = 12
         root.edgeInsets = NSEdgeInsets(top: 25, left: 32, bottom: 24, right: 32)
         window.contentView = root
-        let title = NSTextField(labelWithString: "让桌面，随开合舒展。")
-        title.font = .systemFont(ofSize: 26, weight: .semibold)
-        root.addArrangedSubview(title)
-        let subtitle = NSTextField(labelWithString: "底边固定 · 透视折叠 · 渐变柔焦")
-        subtitle.textColor = .secondaryLabelColor
-        root.addArrangedSubview(subtitle)
+        titleLabel = NSTextField(labelWithString: tr(.title)); titleLabel.font = .systemFont(ofSize: 26, weight: .semibold); root.addArrangedSubview(titleLabel)
+        subtitleLabel = NSTextField(labelWithString: tr(.subtitle)); subtitleLabel.textColor = .secondaryLabelColor; root.addArrangedSubview(subtitleLabel)
+        let languageRow = NSStackView()
+        languageRow.spacing = 10
+        languageLabel = NSTextField(labelWithString: tr(.language))
+        languageRow.addArrangedSubview(languageLabel)
+        languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        languagePopup.addItems(withTitles: AppLanguage.allCases.map(\.label))
+        languagePopup.target = self
+        languagePopup.action = #selector(languageChanged(_:))
+        languagePopup.selectItem(at: AppLanguage.allCases.firstIndex(of: language) ?? 0)
+        languagePopup.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        languageRow.addArrangedSubview(languagePopup)
+        root.addArrangedSubview(languageRow)
         preview.view.widthAnchor.constraint(equalToConstant: 676).isActive = true
-        preview.view.heightAnchor.constraint(equalToConstant: 360).isActive = true
+        preview.view.heightAnchor.constraint(equalToConstant: 300).isActive = true
         preview.view.wantsLayer = true
         preview.view.layer?.cornerRadius = 14
         preview.view.layer?.masksToBounds = true
         root.addArrangedSubview(preview.view)
-        do { try preview.setImage(Self.demoImage()) } catch { showFatal(error.localizedDescription) }
+        do { try preview.setImage(Self.demoImage()) } catch { showFatal(errorText(error)) }
         let row = NSStackView()
         row.spacing = 12
         label = NSTextField(labelWithString: "105°")
         label.font = .monospacedDigitSystemFont(ofSize: 15, weight: .medium)
         label.widthAnchor.constraint(equalToConstant: 58).isActive = true
         angleSlider = NSSlider(value: 105, minValue: 10, maxValue: 140, target: self, action: #selector(manualAngle))
-        angleSlider.widthAnchor.constraint(equalToConstant: 370).isActive = true
-        row.addArrangedSubview(NSTextField(labelWithString: "开合角度"))
+        angleSlider.widthAnchor.constraint(equalToConstant: 320).isActive = true
+        angleTitle = NSTextField(labelWithString: tr(.angle)); row.addArrangedSubview(angleTitle)
+        angleTitle.widthAnchor.constraint(equalToConstant: 112).isActive = true
         row.addArrangedSubview(angleSlider)
         row.addArrangedSubview(label)
-        row.addArrangedSubview(NSButton(title: "播放", target: self, action: #selector(playDemo)))
+        playButton = NSButton(title: tr(.play), target: self, action: #selector(playDemo)); row.addArrangedSubview(playButton)
+        playButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
         root.addArrangedSubview(row)
         let controls = NSStackView()
         controls.spacing = 14
-        follow = NSButton(checkboxWithTitle: "跟随真实屏幕", target: self, action: #selector(toggleFollow))
+        follow = NSButton(checkboxWithTitle: tr(.follow), target: self, action: #selector(toggleFollow))
         follow.isEnabled = sensor.read() != nil
         controls.addArrangedSubview(follow)
-        controls.addArrangedSubview(NSButton(title: "将当前角度设为展开", target: self, action: #selector(calibrate)))
-        liveButton = NSButton(title: "启用真实桌面", target: self, action: #selector(toggleLive))
+        calibrateButton = NSButton(title: tr(.calibrate), target: self, action: #selector(calibrate)); controls.addArrangedSubview(calibrateButton)
+        liveButton = NSButton(title: tr(.live), target: self, action: #selector(toggleLive))
         liveButton.bezelStyle = .rounded
-        controls.addArrangedSubview(liveButton)
         root.addArrangedSubview(controls)
+        root.addArrangedSubview(liveButton)
         let effects = NSStackView()
         effects.spacing = 10
-        for (index, title) in ["透视", "柔焦", "阴影"].enumerated() {
-            effects.addArrangedSubview(NSTextField(labelWithString: title))
+        for (index, key) in [TextKey.perspective, .blur, .shade].enumerated() {
+            let column = NSStackView()
+            column.orientation = .vertical
+            column.alignment = .leading
+            column.spacing = 5
+            let effectTitle = NSTextField(labelWithString: tr(key)); effectsTitles.append(effectTitle); column.addArrangedSubview(effectTitle)
             let slider = NSSlider(value: [1.0, 0.65, 0.4][index], minValue: 0, maxValue: 1, target: self, action: #selector(effectChanged(_:)))
             slider.tag = index
-            slider.widthAnchor.constraint(equalToConstant: 145).isActive = true
-            effects.addArrangedSubview(slider)
+            slider.widthAnchor.constraint(equalToConstant: 218).isActive = true
+            effectSliders.append(slider)
+            column.addArrangedSubview(slider)
+            effects.addArrangedSubview(column)
         }
         root.addArrangedSubview(effects)
-        message = NSTextField(wrappingLabelWithString: sensor.read().map { "传感器已连接 · 当前 \(Int($0))°。拖动滑块预览，或勾选跟随真实屏幕。" } ?? "未读取到传感器，可使用手动预览。")
+        message = NSTextField(wrappingLabelWithString: "")
         message.textColor = .secondaryLabelColor
         message.font = .systemFont(ofSize: 12)
         message.widthAnchor.constraint(equalToConstant: 670).isActive = true
+        message.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
         root.addArrangedSubview(message)
-        root.addArrangedSubview(NSTextField(labelWithString: "真实桌面需屏幕录制权限 · 菜单栏随时停止 · 图像只在内存中处理"))
+        footerLabel = NSTextField(wrappingLabelWithString: tr(.footer))
+        footerLabel.widthAnchor.constraint(equalToConstant: 670).isActive = true
+        footerLabel.font = .systemFont(ofSize: 12)
+        footerLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(footerLabel)
         setupMenu()
+        refreshLanguage()
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { MainActor.assumeIsolated { self?.stopLive() }; return nil }
             return event
@@ -123,16 +171,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupMenu() {
         let main = NSMenu()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "退出 MacBook Duo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menuQuitItem = appMenu.addItem(withTitle: tr(.menuQuit), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let item = NSMenuItem(); item.submenu = appMenu; main.addItem(item); NSApp.mainMenu = main
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "◩ Duo"
         let menu = NSMenu()
-        menu.addItem(withTitle: "打开预览", action: #selector(showWindow), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "停止桌面效果", action: #selector(stopLive), keyEquivalent: "").target = self
+        menuOpenItem = menu.addItem(withTitle: tr(.menuOpen), action: #selector(showWindow), keyEquivalent: ""); menuOpenItem.target = self
+        menuStopItem = menu.addItem(withTitle: tr(.menuStop), action: #selector(stopLive), keyEquivalent: ""); menuStopItem.target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        statusQuitItem = menu.addItem(withTitle: tr(.menuQuit), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
+    }
+    @objc private func languageChanged(_ sender: NSPopUpButton) {
+        guard AppLanguage.allCases.indices.contains(sender.indexOfSelectedItem) else { return }
+        language = AppLanguage.allCases[sender.indexOfSelectedItem]
+        UserDefaults.standard.set(language.rawValue, forKey: "appLanguage")
+        refreshLanguage()
+    }
+    private func refreshLanguage() {
+        titleLabel.stringValue = tr(.title); subtitleLabel.stringValue = tr(.subtitle); angleTitle.stringValue = tr(.angle)
+        languageLabel.stringValue = tr(.language)
+        languagePopup.setAccessibilityLabel(tr(.language))
+        angleSlider.setAccessibilityLabel(tr(.angle))
+        playButton.title = tr(demo ? .pause : .play); follow.title = tr(.follow); calibrateButton.title = tr(.calibrate)
+        liveButton.title = tr(starting ? .starting : (live ? .stop : .live)); footerLabel.stringValue = tr(.footer)
+        for (label, key) in zip(effectsTitles, [TextKey.perspective, .blur, .shade]) { label.stringValue = tr(key) }
+        for (slider, key) in zip(effectSliders, [TextKey.perspective, .blur, .shade]) { slider.setAccessibilityLabel(tr(key)) }
+        menuOpenItem.title = tr(.menuOpen); menuStopItem.title = tr(.menuStop); menuQuitItem.title = tr(.menuQuit)
+        statusQuitItem.title = tr(.menuQuit)
+        updateMessage()
+    }
+    private func setStatus(_ status: StatusMessage) {
+        currentStatus = status
+        updateMessage()
+    }
+    private func updateMessage() {
+        guard let message else { return }
+        switch currentStatus {
+        case .ready:
+            message.stringValue = sensor.read().map { language.text(.sensor, angle: Int($0)) } ?? tr(.manual)
+        case .text(let key): message.stringValue = tr(key)
+        case .calibrated(let angle): message.stringValue = language.text(.calibrated, angle: angle)
+        case .captureFailed(let error): message.stringValue = tr(.captureError) + errorText(error)
+        case .captureStopped(let detail): message.stringValue = tr(.captureStopped) + detail
+        }
     }
     @objc private func showWindow() { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc private func effectChanged(_ sender: NSSlider) {
@@ -145,18 +227,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             renderer.render()
         }
     }
-    @objc private func manualAngle() { demo = false; follow.state = .off }
-    @objc private func playDemo() { demo.toggle(); demoStart = Date(); follow.state = .off }
-    @objc private func toggleFollow() { demo = false }
+    @objc private func manualAngle() { demo = false; follow.state = .off; playButton.title = tr(.play) }
+    @objc private func playDemo() { demo.toggle(); demoStart = Date(); follow.state = .off; playButton.title = tr(demo ? .pause : .play) }
+    @objc private func toggleFollow() { demo = false; playButton.title = tr(.play) }
     @objc private func calibrate() {
         calibration = max(40, sensor.read() ?? angleSlider.doubleValue)
-        message.stringValue = "展开角度设为 \(Int(calibration))°。小于此角度时开始折叠。"
+        setStatus(.calibrated(Int(calibration)))
     }
     private func tick() {
         var angle = angleSlider.doubleValue
         if demo { angle = 65 + 40 * cos(Date().timeIntervalSince(demoStart) * 1.25); angleSlider.doubleValue = angle }
         if follow.state == .on {
-            guard let reading = sensor.read() else { stopLive(); message.stringValue = "传感器读取中断，桌面效果已停止。"; follow.state = .off; return }
+            guard let reading = sensor.read() else { stopLive(); setStatus(.text(.stopped)); follow.state = .off; return }
             angle = reading
             angleSlider.doubleValue = angle
         }
@@ -178,16 +260,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !starting else { return }
         guard CGPreflightScreenCaptureAccess() else {
             CGRequestScreenCaptureAccess()
-            message.stringValue = "请在系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 MacBook Duo，然后重新打开应用。"
+            setStatus(.text(.permission))
             return
         }
         guard let screen = NSScreen.screens.first(where: { screen in
             guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? UInt32 else { return false }
             return CGDisplayIsBuiltin(id) != 0
         }), let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? UInt32 else {
-            message.stringValue = "找不到内置显示屏。"; return
+            setStatus(.text(.noDisplay)); return
         }
         starting = true
+        liveButton.title = tr(.starting)
+        setStatus(.text(.starting))
         liveButton.isEnabled = false
         Task {
             do {
@@ -208,19 +292,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 panel.alphaValue = 0
                 panel.orderFrontRegardless()
                 capture.onFrame = { [weak self] buffer in self?.overlayRenderer?.setFrame(buffer) }
-                capture.onFailure = { [weak self] error in self?.stopLive(); self?.message.stringValue = "捕获停止：\(error)" }
+                capture.onFailure = { [weak self] error in self?.stopLive(); self?.setStatus(.captureStopped(error)) }
                 try await capture.start(displayID: id, excluding: panel.windowNumber)
                 guard starting else { await capture.stop(); panel.orderOut(nil); return }
                 panel.orderOut(nil)
                 panel.alphaValue = 1
                 live = true
                 demo = false
+                playButton.title = tr(.play)
                 if sensor.read() != nil { follow.state = .on }
-                liveButton.title = "停止真实桌面"
-                message.stringValue = "桌面效果已启用。正常打开时自动隐藏；菜单栏可随时停止。"
+                liveButton.title = tr(.stop)
+                setStatus(.text(.enabled))
             } catch {
                 stopLive()
-                message.stringValue = "无法启动桌面捕获：\(error.localizedDescription)"
+                setStatus(.captureFailed(error))
             }
             starting = false
             liveButton.isEnabled = true
@@ -232,8 +317,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlay?.orderOut(nil)
         overlay = nil
         overlayRenderer = nil
-        liveButton?.title = "启用真实桌面"
+        liveButton?.title = tr(.live)
         liveButton?.isEnabled = true
+        setStatus(.text(.disabled))
         Task { await capture.stop() }
     }
     func applicationWillTerminate(_ notification: Notification) {
@@ -241,7 +327,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
     }
-    private func showFatal(_ text: String) { let alert = NSAlert(); alert.messageText = text; alert.runModal() }
+    private func showFatal(_ text: String) {
+        let alert = NSAlert()
+        alert.messageText = tr(.errorTitle)
+        alert.informativeText = text
+        alert.addButton(withTitle: tr(.ok))
+        alert.runModal()
+    }
     private static func demoImage() -> CGImage {
         let image = NSImage(size: NSSize(width: 1352, height: 720))
         image.lockFocus()

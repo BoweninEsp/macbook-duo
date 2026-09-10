@@ -17,7 +17,7 @@ final class FoldRenderer: NSObject, MTKViewDelegate {
 
     init(size: NSSize) throws {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
-            throw NSError(domain: "Metal unavailable", code: 1)
+            throw AppFailure.metalUnavailable
         }
         self.queue = queue
         view = MTKView(frame: NSRect(origin: .zero, size: size), device: device)
@@ -133,10 +133,10 @@ final class FoldRenderer: NSObject, MTKViewDelegate {
         let width = image.width, height = image.height
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: width, height: height, mipmapped: false)
         descriptor.usage = .shaderRead
-        guard let tex = device.makeTexture(descriptor: descriptor) else { throw NSError(domain: "Texture allocation failed", code: 2) }
+        guard let tex = device.makeTexture(descriptor: descriptor) else { throw AppFailure.textureAllocationFailed }
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
         try pixels.withUnsafeMutableBytes { bytes in
-            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw NSError(domain: "Image conversion failed", code: 3) }
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw AppFailure.imageConversionFailed }
             context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             tex.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0, withBytes: bytes.baseAddress!, bytesPerRow: width * 4)
         }
