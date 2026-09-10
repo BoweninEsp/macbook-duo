@@ -1,5 +1,7 @@
 # MacBook Duo
 
+[中文](#macbook-duo) · [English](#english)
+
 一个免费的开源 macOS 原型：让桌面随 MacBook 屏幕开合产生空间视差、渐进失焦和边缘散射。
 
 技术栈：Swift 6、AppKit、Metal、ScreenCaptureKit、IOKit HID。
@@ -45,3 +47,50 @@
 
 HID 设备标识与报告格式参考 Sam Gold 的公开项目：
 https://github.com/samhenrigold/LidAngleSensor 。本项目未引入其源码或资源。
+
+---
+
+## English
+
+MacBook Duo is a free, open-source macOS prototype that gives your desktop a spatial fold, progressive defocus, and edge light scattering as the MacBook lid closes.
+
+Built with Swift 6, AppKit, Metal, ScreenCaptureKit, and IOKit HID.
+
+The interface supports Simplified Chinese, Traditional Chinese, English, and Spanish. Change the language directly in the app; the choice is saved locally and restored on the next launch.
+
+### Run
+
+Open `dist/MacBook Duo.app`, drag the lid-angle slider, or press **Play** to preview the effect. Screen Recording permission is not needed for the preview.
+
+- **Follow real lid** uses the built-in hinge-angle sensor to drive the preview.
+- **Set current angle as open** calibrates your normal open-lid angle.
+- **Perspective**, **Defocus**, and **Shade** sliders adjust the effect live.
+- **Enable live desktop** requests Screen Recording permission the first time. Allow MacBook Duo in System Settings, reopen the app, and enable it again.
+- The overlay hides when the lid is open. **Stop desktop effect** remains available from the menu bar.
+- Sleep and display-layout changes stop live desktop mode; enable it again after waking.
+
+### Build
+
+Requires Swift 6.2 or later and macOS 14 or later.
+
+```sh
+./scripts/build-app.sh
+.build/release/MacBookDuo --probe
+```
+
+The generated app uses an ad-hoc local signature. It is not Developer ID signed or notarized, so macOS may ask you to approve it the first time you open it.
+
+### Privacy and limitations
+
+- The hinge sensor is read through an IOKit HID Feature Report at 30 Hz.
+- Metal projects rays through the moving screen onto a flat desktop plane behind it. Blur, black space, and edge scattering follow the physical separation between the layers.
+- Live capture is limited to the built-in display, excludes the effect window, captures at up to 30 fps, records no audio, and does not write or upload frames.
+- The overlay lets mouse events pass through. Because the visual projection and desktop hit targets differ while folded, use the desktop in the open state.
+- Manual preview, sliders, and the hinge sensor have been tested on an M3 Pro MacBook Pro. Live capture still needs verification on each user's Mac after permission is granted. Lock screens, protected video, unusual display scaling, and long-running power use are not fully tested.
+- This is a visual-effects prototype. It does not transform system window geometry or change MacBook sleep behavior.
+
+The HID identifiers and report format were informed by Sam Gold's public [LidAngleSensor](https://github.com/samhenrigold/LidAngleSensor) project. This project does not include its source code or assets.
+
+### License
+
+Released under the [MIT License](LICENSE). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
